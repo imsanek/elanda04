@@ -1,0 +1,3158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Виртуальный тур — База отдыха «Еланда»</title>
+<script src="https://cdn.jsdelivr.net/npm/marzipano@0.10.2/dist/marzipano.js"></script>
+<style>
+:root {
+  --bg: #ffffff; --surface: #f7f4ee; --surface-2: #faf8f3;
+  --border: #e3ddd0; --accent: #4a7a5c; --accent-dk: #3a6049;
+  --text: #2c3a32; --muted: #7a8278;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: var(--font); color: var(--text); background: var(--bg); overflow: hidden; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+
+.header { display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; height: 56px; flex-shrink: 0;
+  background: var(--bg); border-bottom: 1px solid var(--border); }
+.header__brand { display: flex; align-items: center; gap: 10px; }
+.header__logo { width: 32px; height: 32px; background: var(--accent); color: #fff;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.header__title { font-size: 15px; font-weight: 600; }
+.header__subtitle { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.header__right { display: flex; gap: 8px; align-items: center; }
+.edit-badge { padding: 4px 10px; background: #e67e22; color: #fff;
+  font-size: 11px; font-weight: 600; border-radius: 6px; letter-spacing: 0.03em; }
+.hbtn { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer;
+  transition: all 0.18s; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+.hbtn:hover { background: var(--surface); }
+.hbtn.orange { background: #e67e22; color: #fff; border-color: #e67e22; }
+.hbtn.orange:hover { background: #d16a15; }
+
+.stage { flex: 1; position: relative; overflow: hidden; }
+
+/* MAPVIEW */
+.mapview { position: absolute; inset: 0; display: flex; flex-direction: column;
+  background: var(--surface-2);
+  transition: opacity 0.3s, visibility 0.3s; }
+.mapview.hidden { opacity: 0; visibility: hidden; }
+.mapview__intro { padding: 16px 24px 8px; text-align: center; flex-shrink: 0; }
+.mapview__intro h2 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.mapview__intro p { font-size: 13px; color: var(--muted); }
+.mapview__wrap { flex: 1; position: relative; padding: 8px 24px 8px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.mapview__inner { position: relative; max-width: 100%; max-height: 100%;
+  aspect-ratio: 3 / 2;
+  width: min(100%, calc((100vh - 220px) * 1.5));
+  background: #fff; border-radius: 14px; overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08); border: 1px solid var(--border); }
+.mapview__img { width: 100%; height: 100%; object-fit: cover; display: block;
+  user-select: none; pointer-events: none; }
+
+/* Точка на карте */
+.mdot { position: absolute; transform: translate(-50%, -50%); cursor: pointer; z-index: 2;
+  touch-action: none; }
+.mdot__pin { width: 32px; height: 32px;
+  background: var(--accent); color: #fff;
+  border: 3px solid #fff; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+  transition: transform 0.15s;
+}
+.mdot:hover .mdot__pin, .mdot.active .mdot__pin { transform: scale(1.18); z-index: 3; }
+.mdot__label { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: rgba(13,17,23,0.92); color: #fff; font-size: 11px; font-weight: 500;
+  padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.15s; }
+.mdot:hover .mdot__label { opacity: 1; }
+
+/* EDIT MODE */
+.editmode .mdot { cursor: move; }
+.editmode .mdot__pin {
+  border-color: #ff9500; box-shadow: 0 0 0 3px rgba(255,149,0,0.3), 0 3px 8px rgba(0,0,0,0.3); }
+.editmode .mdot.dragging .mdot__pin {
+  transform: scale(1.3); box-shadow: 0 0 0 5px rgba(255,149,0,0.4), 0 6px 14px rgba(0,0,0,0.4); }
+
+.mapview__legend { padding: 10px 24px 16px; display: flex; gap: 14px; justify-content: center;
+  flex-wrap: wrap; flex-shrink: 0; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.legend-swatch { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
+
+/* PANOVIEW */
+.panoview { position: absolute; inset: 0; background: #f7f4ee;
+  transition: opacity 0.3s, visibility 0.3s; }
+.panoview.hidden { opacity: 0; visibility: hidden; }
+.pano { width: 100%; height: 100%; position: relative; z-index: 1; }
+
+/* Preview-фон — сцена сразу видна пока грузится полное качество */
+.pano-preview {
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px) saturate(1.1);
+  transform: scale(1.15); /* компенсируем края от blur */
+  z-index: 0;
+  transition: opacity 0.4s;
+}
+.pano-preview.hidden { opacity: 0; }
+
+.loader { position: absolute; inset: 0; background: rgba(247,244,238,0.94);
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+  z-index: 100; transition: opacity 0.3s; }
+.loader.hidden { opacity: 0; pointer-events: none; }
+.loader__spinner { width: 42px; height: 42px; border: 3px solid var(--surface);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+.loader__text { color: var(--text); font-size: 14px; font-weight: 500; }
+.loader__progress { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.scene-info { position: absolute; top: 16px; left: 16px; z-index: 20;
+  background: rgba(255,255,255,0.96); backdrop-filter: blur(8px);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; max-width: 260px; }
+.scene-info__title { font-size: 14px; font-weight: 600; }
+.scene-info__zone { font-size: 10px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+.backmap { position: absolute; top: 16px; right: 16px; z-index: 20;
+  padding: 8px 14px; border-radius: 10px;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 13px; font-weight: 500; cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  transition: background 0.18s; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 6px; }
+.backmap:hover { background: var(--accent-dk); }
+
+.hotspot { width: 32px; height: 32px; cursor: pointer; transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center; }
+.hotspot__dot { width: 22px; height: 22px;
+  background: rgba(255,255,255,0.95); border: 3px solid var(--accent);
+  border-radius: 50%; box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  transition: transform 0.15s; position: relative; }
+.hotspot__dot::after {
+  content: ""; position: absolute; inset: -4px;
+  border: 2px solid var(--accent); border-radius: 50%;
+  opacity: 0; animation: pulse 2s infinite; }
+.hotspot:hover .hotspot__dot { transform: scale(1.2); background: var(--accent); }
+.hotspot__label { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  background: rgba(13,17,23,0.9); color: #fff; font-size: 11px; font-weight: 500;
+  padding: 5px 10px; border-radius: 6px; white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+.hotspot:hover .hotspot__label { opacity: 1; }
+@keyframes pulse { 0% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
+
+.controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 4px; background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(10px); border: 1px solid var(--border);
+  border-radius: 30px; padding: 6px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); z-index: 15; }
+.ctrl-btn { width: 36px; height: 36px; border: none; background: transparent;
+  color: var(--muted); border-radius: 50%; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  transition: all 0.18s; font-family: inherit; }
+.ctrl-btn:hover { background: var(--surface); color: var(--text); }
+.ctrl-btn.active { background: var(--accent); color: #fff; }
+.ctrl-divider { width: 1px; height: 18px; background: var(--border); margin: 9px 4px; }
+
+.scene-nav { position: absolute; bottom: 20px; left: 20px; z-index: 15;
+  display: flex; gap: 6px; }
+.scene-nav-btn { padding: 8px 12px; border-radius: 10px;
+  background: rgba(255,255,255,0.96); border: 1px solid var(--border);
+  color: var(--text); font-size: 12px; cursor: pointer; font-family: inherit;
+  display: inline-flex; align-items: center; gap: 4px; transition: all 0.18s; }
+.scene-nav-btn:hover { background: var(--surface); }
+.counter { position: absolute; bottom: 20px; right: 20px; z-index: 15;
+  padding: 8px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.96); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* MODAL — общий */
+.modal { position: fixed; inset: 0; background: rgba(13,17,23,0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+  opacity: 0; visibility: hidden; transition: all 0.2s; }
+.modal.visible { opacity: 1; visibility: visible; }
+.modal__box { background: var(--bg); border-radius: 14px;
+  width: min(90vw, 600px); max-height: 85vh;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+.modal__header { padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.modal__title { font-size: 16px; font-weight: 600; }
+.modal__close { border: none; background: transparent; color: var(--muted);
+  font-size: 20px; cursor: pointer; padding: 4px 8px; border-radius: 6px; }
+.modal__close:hover { background: var(--surface); }
+
+/* MODAL — список сцен */
+.modal__filter { display: flex; gap: 4px; padding: 10px 16px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.zone-chip { padding: 5px 11px; border-radius: 14px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--muted); font-size: 11px; cursor: pointer;
+  transition: all 0.18s; font-family: inherit; }
+.zone-chip:hover { color: var(--text); }
+.zone-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.modal__list { flex: 1; overflow-y: auto; padding: 8px; }
+.scene-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+  border-radius: 8px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+.scene-item:hover { background: var(--surface); border-color: var(--border); }
+.scene-item__num { width: 30px; height: 30px; background: var(--accent);
+  color: #fff; border-radius: 50%; flex-shrink: 0; display: flex;
+  align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+.scene-item__info { flex: 1; min-width: 0; }
+.scene-item__name { font-size: 14px; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scene-item__zone { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* MODAL — экспорт JSON */
+.export-body { padding: 16px 20px; }
+.export-body p { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.export-text { width: 100%; height: 320px; padding: 12px; border: 1px solid var(--border);
+  border-radius: 8px; font-family: 'Menlo', 'Monaco', monospace; font-size: 11px;
+  background: var(--surface); resize: none; }
+.export-actions { padding: 12px 20px; border-top: 1px solid var(--border);
+  display: flex; gap: 8px; justify-content: flex-end; }
+
+@media (max-width: 640px) {
+  .header { padding: 0 12px; }
+  .header__title { font-size: 14px; }
+  .header__subtitle { display: none; }
+  .hbtn { padding: 6px 10px; font-size: 12px; }
+  .mapview__intro { padding: 10px 12px 4px; }
+  .mapview__intro h2 { font-size: 15px; }
+  .mapview__intro p { font-size: 11px; }
+  .mapview__wrap { padding: 4px 8px; }
+  .mapview__legend { padding: 6px 12px 12px; gap: 8px; }
+  .legend-item { font-size: 10px; }
+  .mdot__pin { width: 26px; height: 26px; font-size: 10px; border-width: 2px; }
+  .scene-info { top: 8px; left: 8px; padding: 6px 10px; max-width: 180px; }
+  .scene-info__title { font-size: 12px; }
+  .backmap { top: 8px; right: 8px; padding: 6px 10px; font-size: 12px; }
+  .controls { bottom: 12px; padding: 4px; }
+  .ctrl-btn { width: 30px; height: 30px; font-size: 13px; }
+  .scene-nav, .counter { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="header">
+    <div class="header__brand">
+      <div class="header__logo">🏔</div>
+      <div>
+        <div class="header__title">База отдыха «Еланда»</div>
+        <div class="header__subtitle">Виртуальный тур · Алтай</div>
+      </div>
+    </div>
+    <div class="header__right">
+      <span id="editBadge" class="edit-badge" style="display:none">Режим редактирования</span>
+      <button id="btnExport" class="hbtn orange" style="display:none">Экспорт координат</button>
+      <button id="btnListModal" class="hbtn">Список сцен</button>
+    </div>
+  </header>
+
+  <div class="stage">
+
+    <div class="mapview" id="mapview">
+      <div class="mapview__intro">
+        <h2 id="mapviewTitle">Выберите точку на карте</h2>
+        <p id="mapviewSubtitle">Нажмите на любую точку, чтобы перейти в панораму</p>
+      </div>
+      <div class="mapview__wrap">
+        <div class="mapview__inner" id="mapInner">
+          <img class="mapview__img" id="mapImg" src="" alt="Карта территории">
+        </div>
+      </div>
+      <div class="mapview__legend" id="legend"></div>
+    </div>
+
+    <div class="panoview hidden" id="panoview">
+      <div class="pano-preview hidden" id="panoPreview"></div>
+      <div id="pano" class="pano"></div>
+      <div class="loader hidden" id="loader">
+        <div class="loader__spinner"></div>
+        <div class="loader__text" id="loaderText">Загружаю…</div>
+        <div class="loader__progress" id="loaderProgress"></div>
+      </div>
+      <div class="scene-info">
+        <div class="scene-info__title" id="sceneTitle">—</div>
+        <div class="scene-info__zone" id="sceneZone">—</div>
+      </div>
+      <button class="backmap" id="btnBackMap"><span>🗺</span> На карту</button>
+      <div class="scene-nav">
+        <button class="scene-nav-btn" id="btnPrev">← Пред.</button>
+        <button class="scene-nav-btn" id="btnNext">След. →</button>
+      </div>
+      <div class="counter" id="counter">— / —</div>
+      <div class="controls">
+        <button class="ctrl-btn" id="btnLeft" title="Влево">←</button>
+        <button class="ctrl-btn" id="btnRight" title="Вправо">→</button>
+        <button class="ctrl-btn" id="btnUp" title="Вверх">↑</button>
+        <button class="ctrl-btn" id="btnDown" title="Вниз">↓</button>
+        <div class="ctrl-divider"></div>
+        <button class="ctrl-btn" id="btnZoomIn" title="Приблизить">+</button>
+        <button class="ctrl-btn" id="btnZoomOut" title="Отдалить">−</button>
+        <div class="ctrl-divider"></div>
+        <button class="ctrl-btn" id="btnAuto" title="Авторотация">⟳</button>
+        <button class="ctrl-btn" id="btnFull" title="Полный экран">⛶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Список сцен -->
+<div class="modal" id="listModal">
+  <div class="modal__box">
+    <div class="modal__header">
+      <div class="modal__title">Все сцены тура</div>
+      <button class="modal__close" id="btnCloseModal">✕</button>
+    </div>
+    <div class="modal__filter" id="modalFilter">
+      <button class="zone-chip active" data-zone="all">Все</button>
+    </div>
+    <div class="modal__list" id="modalList"></div>
+  </div>
+</div>
+
+<!-- Экспорт координат -->
+<div class="modal" id="exportModal">
+  <div class="modal__box">
+    <div class="modal__header">
+      <div class="modal__title">Экспорт координат точек</div>
+      <button class="modal__close" id="btnCloseExport">✕</button>
+    </div>
+    <div class="export-body">
+      <p>Скопируй этот JSON и пришли мне — я вшью новые координаты в чистую версию тура.</p>
+      <textarea id="exportText" class="export-text" readonly></textarea>
+    </div>
+    <div class="export-actions">
+      <button class="hbtn" id="btnCopyExport">Скопировать в буфер</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOUR_CONFIG = {
+  "title": "Туристическая база «Еланда»",
+  "tilesBase": "vtourdata",
+  "floorplan": "vtourdata/floorplan/_1072108810901072.jpg",
+  "startScene": "pano18",
+  "scenes": [
+    {
+      "id": "pano17",
+      "folder": "banya_17",
+      "title": "Внутри бани",
+      "initialView": {
+        "h": -64.710744,
+        "v": 20.826446,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 178.699687,
+          "atv": -11.731682,
+          "target": "pano46",
+          "tooltip": "Аллея — ул. Молодёжная (4)",
+          "targetView": {
+            "h": 177.396694,
+            "v": 5.950413,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 178.357673,
+          "atv": -0.941938,
+          "target": "pano29",
+          "tooltip": "Ул. Молодёжная — 1",
+          "targetView": null
+        },
+        {
+          "ath": 178.357673,
+          "atv": 10.190345,
+          "target": "pano33",
+          "tooltip": "Нижний участок — 1",
+          "targetView": null
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 82.8,
+        "y": 69.7
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano25",
+      "folder": "kontora1_25",
+      "title": "Номер в администрации",
+      "initialView": {
+        "h": -90.743802,
+        "v": 3.347107,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -76.287957,
+          "atv": 4.824361,
+          "target": "pano26",
+          "tooltip": "Номер в администрации (2)",
+          "targetView": null
+        },
+        {
+          "ath": 89.753044,
+          "atv": -3.069182,
+          "target": "pano46",
+          "tooltip": "Аллея — ул. Молодёжная (4)",
+          "targetView": {
+            "h": 178.140496,
+            "v": 2.975207,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 89.81497,
+          "atv": 4.495318,
+          "target": "pano29",
+          "tooltip": "Ул. Молодёжная — 1",
+          "targetView": null
+        },
+        {
+          "ath": 89.938438,
+          "atv": 11.873882,
+          "target": "pano33",
+          "tooltip": "Нижний участок — 1",
+          "targetView": null
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 53.9,
+        "y": 80.3
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano26",
+      "folder": "kontora2_26",
+      "title": "Номер в администрации — второй ракурс",
+      "initialView": {
+        "h": 86.28,
+        "v": 0.0,
+        "fov": 74.38
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -37.249918,
+          "atv": 6.846843,
+          "target": "pano25",
+          "tooltip": "Номер в администрации",
+          "targetView": {
+            "h": 88.512397,
+            "v": 1.115702,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 53.8,
+        "y": 86.3
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano43",
+      "folder": "ubani2_43",
+      "title": "У бани — вход",
+      "initialView": {
+        "h": -142.438017,
+        "v": 1.115702,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 117.637911,
+          "atv": -1.419479,
+          "target": "pano17",
+          "tooltip": "В баню",
+          "targetView": null
+        },
+        {
+          "ath": -108.254879,
+          "atv": 24.380465,
+          "target": "pano34",
+          "tooltip": "Нижний участок — 2",
+          "targetView": {
+            "h": 174.26859,
+            "v": -1.85955,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 85.2,
+        "y": 77.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano42",
+      "folder": "ubani_42",
+      "title": "У бани — крыльцо",
+      "initialView": {
+        "h": 3.38,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -118.209962,
+          "atv": -5.177339,
+          "target": "pano17",
+          "tooltip": "В баню",
+          "targetView": null
+        },
+        {
+          "ath": -169.155612,
+          "atv": -6.887162,
+          "target": "pano46",
+          "tooltip": "Верхний участок",
+          "targetView": {
+            "h": 179.256198,
+            "v": 7.809917,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 63.707035,
+          "atv": 10.974065,
+          "target": "pano27",
+          "tooltip": "Костер",
+          "targetView": null
+        },
+        {
+          "ath": 107.308445,
+          "atv": -11.25522,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": null
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 89.6,
+        "y": 74.0
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano18",
+      "folder": "centr_18",
+      "title": "Центр базы",
+      "initialView": {
+        "h": -41.32,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 21.577685,
+          "atv": -6.016501,
+          "target": "pano25",
+          "tooltip": "Номер в администрации",
+          "targetView": {
+            "h": -90.0,
+            "v": 4.46281,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -55.777684,
+          "atv": 5.330161,
+          "target": "pano29",
+          "tooltip": "ул. Молодежная",
+          "targetView": null
+        },
+        {
+          "ath": 17.184956,
+          "atv": -4.124701,
+          "target": "pano33",
+          "tooltip": "Нижний участок",
+          "targetView": null
+        },
+        {
+          "ath": -167.573952,
+          "atv": -0.894603,
+          "target": "pano46",
+          "tooltip": "Верхний участок",
+          "targetView": {
+            "h": 178.512397,
+            "v": 15.991736,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -147.528936,
+          "atv": -2.154061,
+          "target": "pano42",
+          "tooltip": "Баня",
+          "targetView": {
+            "h": -109.67176,
+            "v": -5.20674,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -33.184075,
+          "atv": -4.381018,
+          "target": "pano40",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 80.66764,
+            "v": -3.34719,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -86.55084,
+          "atv": -7.031701,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -169.958678,
+            "v": 10.041322,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 31.408195,
+          "atv": 1.702623,
+          "target": "pano19",
+          "tooltip": "Центр базы (2)",
+          "targetView": null
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 32.1,
+        "y": 57.6
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano19",
+      "folder": "centr3_19",
+      "title": "Центр базы — от беседки",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -166.699009,
+          "atv": 7.632719,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": {
+            "h": -156.98401,
+            "v": -2.60337,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 179.366763,
+          "atv": 0.713875,
+          "target": "pano46",
+          "tooltip": "Верхний участок",
+          "targetView": {
+            "h": 178.140496,
+            "v": -1.859504,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -119.42136,
+          "atv": 5.989319,
+          "target": "pano18",
+          "tooltip": "ул. Молодежная",
+          "targetView": null
+        },
+        {
+          "ath": -9.514804,
+          "atv": -9.774538,
+          "target": "pano25",
+          "tooltip": "Номера в администрации",
+          "targetView": null
+        },
+        {
+          "ath": -20.537642,
+          "atv": -6.047099,
+          "target": "pano33",
+          "tooltip": "Нижний участок",
+          "targetView": null
+        },
+        {
+          "ath": -130.21848,
+          "atv": -1.869838,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -75.495868,
+            "v": 1.115702,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "objects",
+      "map": {
+        "x": 38.4,
+        "y": 44.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano36",
+      "folder": "nomer_x2_36",
+      "title": "Двухместный домик",
+      "initialView": {
+        "h": 38.31,
+        "v": 0.0,
+        "fov": 74.38
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -140.015881,
+          "atv": -10.351439,
+          "target": "pano45",
+          "tooltip": "Аллея — ул. Молодёжная (2)",
+          "targetView": null
+        },
+        {
+          "ath": -140.159159,
+          "atv": 2.44404,
+          "target": "pano29",
+          "tooltip": "Ул. Молодёжная — 1",
+          "targetView": null
+        },
+        {
+          "ath": -140.159159,
+          "atv": 14.664602,
+          "target": "pano33",
+          "tooltip": "Нижний участок — 1",
+          "targetView": {
+            "h": -56.39718,
+            "v": -1.11573,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "rooms",
+      "map": {
+        "x": 47.4,
+        "y": 37.7
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano35",
+      "folder": "nomer_1_1_35",
+      "title": "Двухместный домик",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 179.174159,
+          "atv": -13.646699,
+          "target": "pano45",
+          "tooltip": "Аллея — ул. Молодёжная (2)",
+          "targetView": null
+        },
+        {
+          "ath": 179.156156,
+          "atv": -2.58786,
+          "target": "pano29",
+          "tooltip": "Ул. Молодёжная — 1",
+          "targetView": null
+        },
+        {
+          "ath": 179.012883,
+          "atv": 8.913785,
+          "target": "pano33",
+          "tooltip": "Нижний участок — 1",
+          "targetView": {
+            "h": -55.65336,
+            "v": -0.37191,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "rooms",
+      "map": {
+        "x": 54.5,
+        "y": 32.3
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano37",
+      "folder": "nomer_x4_2_37",
+      "title": "Четырёхместный домик",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -85.281125,
+          "atv": 3.435116,
+          "target": "pano38",
+          "tooltip": "Номер четырёхместный (2)",
+          "targetView": null
+        },
+        {
+          "ath": 179.667728,
+          "atv": -19.796762,
+          "target": "pano45",
+          "tooltip": "Аллея — ул. Молодёжная (2)",
+          "targetView": null
+        },
+        {
+          "ath": 179.655476,
+          "atv": -3.613681,
+          "target": "pano29",
+          "tooltip": "Ул. Молодёжная — 1",
+          "targetView": null
+        },
+        {
+          "ath": 179.644682,
+          "atv": 13.876741,
+          "target": "pano33",
+          "tooltip": "Нижний участок — 1",
+          "targetView": {
+            "h": -56.39718,
+            "v": -1.11573,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "rooms",
+      "map": {
+        "x": 26.5,
+        "y": 27.6
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano38",
+      "folder": "nomer_x4_4_38",
+      "title": "Четырёхместный домик — второй ракурс",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 104.210644,
+          "atv": 1.497241,
+          "target": "pano37",
+          "tooltip": "Номер четырёхместный",
+          "targetView": {
+            "h": 91.115702,
+            "v": 2.231405,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "rooms",
+      "map": {
+        "x": 25.0,
+        "y": 21.6
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano46",
+      "folder": "ul4_46",
+      "title": "Аллея — конец",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 81.930242,
+          "atv": 0.333903,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": {
+            "h": -14.91439,
+            "v": -1.48764,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -87.359043,
+          "atv": -2.39238,
+          "target": "pano37",
+          "tooltip": "Домик 4х местный",
+          "targetView": null
+        },
+        {
+          "ath": -168.780384,
+          "atv": -4.536361,
+          "target": "pano37",
+          "tooltip": "Домик 4х местный",
+          "targetView": null
+        },
+        {
+          "ath": -23.136842,
+          "atv": 1.741859,
+          "target": "pano37",
+          "tooltip": "Домик 4х местный",
+          "targetView": null
+        },
+        {
+          "ath": 12.24216,
+          "atv": 1.482124,
+          "target": "pano42",
+          "tooltip": "К бане",
+          "targetView": {
+            "h": -111.16828,
+            "v": -7.06629,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 176.940715,
+          "atv": -1.4184,
+          "target": "pano45",
+          "tooltip": "Аллея — ул. Молодёжная (2)",
+          "targetView": {
+            "h": -173.677686,
+            "v": 0.743802,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 18.7,
+        "y": 50.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano44",
+      "folder": "ul1_44",
+      "title": "Аллея — начало",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -91.648437,
+          "atv": -3.546723,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -153.640151,
+          "atv": -0.473222,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -0.222484,
+          "atv": 9.800824,
+          "target": "pano45",
+          "tooltip": "Аллея — ул. Молодёжная (2)",
+          "targetView": null
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 32.4,
+        "y": 32.0
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano45",
+      "folder": "ul2_45",
+      "title": "Аллея — середина",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -126.043922,
+          "atv": -10.724223,
+          "target": "pano37",
+          "tooltip": "Домик 4х местный",
+          "targetView": null
+        },
+        {
+          "ath": -20.616843,
+          "atv": -0.420479,
+          "target": "pano37",
+          "tooltip": "Домик 4х местный",
+          "targetView": null
+        },
+        {
+          "ath": 178.413119,
+          "atv": -0.536758,
+          "target": "pano44",
+          "tooltip": "Аллея — ул. Молодёжная (1)",
+          "targetView": {
+            "h": -180.0,
+            "v": 2.231405,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 34.526167,
+          "atv": 6.298921,
+          "target": "pano46",
+          "tooltip": "Аллея — ул. Молодёжная (4)",
+          "targetView": {
+            "h": 10.041322,
+            "v": -1.115702,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 93.894846,
+          "atv": 1.601461,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": null
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 23.0,
+        "y": 36.7
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano29",
+      "folder": "molod_1_29",
+      "title": "Ул. Молодёжная — 1",
+      "initialView": {
+        "h": 0.676183,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -105.550922,
+          "atv": -9.815222,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 107.52373,
+          "atv": 0.499138,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 44.603999,
+          "atv": 7.864923,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -43.512125,
+          "atv": -0.243539,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 0.432007,
+          "atv": 5.53212,
+          "target": "pano30",
+          "tooltip": "Ул. Молодёжная — 2",
+          "targetView": null
+        },
+        {
+          "ath": -173.902032,
+          "atv": 0.0,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": {
+            "h": 179.22263,
+            "v": -3.34719,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 174.665515,
+          "atv": 0.207539,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": null
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 43.3,
+        "y": 49.6
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano30",
+      "folder": "molod_2_30",
+      "title": "Ул. Молодёжная — 2",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -106.869957,
+          "atv": -7.486201,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -150.738733,
+          "atv": -8.851858,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -44.988477,
+          "atv": 1.558256,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 107.86716,
+          "atv": -3.493438,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 45.650876,
+          "atv": 5.750817,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 0.100079,
+          "atv": 5.628959,
+          "target": "pano31",
+          "tooltip": "Ул. Молодёжная — 3",
+          "targetView": null
+        },
+        {
+          "ath": 179.152915,
+          "atv": -1.361339,
+          "target": "pano29",
+          "tooltip": "Ул. Молодёжная — 1",
+          "targetView": {
+            "h": 157.246431,
+            "v": -2.231405,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 149.521673,
+          "atv": -3.588662,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 49.0,
+        "y": 43.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano31",
+      "folder": "molod_3_31",
+      "title": "Ул. Молодёжная — 3",
+      "initialView": {
+        "h": 2.704733,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -99.55692,
+          "atv": -4.158899,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 100.8864,
+          "atv": -7.153382,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -40.508276,
+          "atv": 2.295896,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 42.560284,
+          "atv": -1.77426,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -146.511757,
+          "atv": -7.040879,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 149.01731,
+          "atv": -5.739841,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 1.568878,
+          "atv": 5.730304,
+          "target": "pano32",
+          "tooltip": "Ул. Молодёжная — 4",
+          "targetView": null
+        },
+        {
+          "ath": -179.002771,
+          "atv": -0.166318,
+          "target": "pano30",
+          "tooltip": "Ул. Молодёжная — 2",
+          "targetView": {
+            "h": 179.256198,
+            "v": 6.694215,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 55.6,
+        "y": 38.6
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano32",
+      "folder": "molod_4_32",
+      "title": "Ул. Молодёжная — 4",
+      "initialView": {
+        "h": 67.835725,
+        "v": -1.688092,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 67.64544,
+          "atv": -19.131301,
+          "target": "pano22",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 126.818182,
+            "v": 3.719008,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -97.562161,
+          "atv": -26.118359,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 122.355372,
+            "v": 15.991736,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 157.834074,
+          "atv": -6.844499,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -162.727489,
+          "atv": -3.875218,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 177.828119,
+          "atv": -2.883241,
+          "target": "pano31",
+          "tooltip": "Ул. Молодёжная — 3",
+          "targetView": {
+            "h": -176.179564,
+            "v": 5.206612,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -139.819321,
+          "atv": -7.209359,
+          "target": "pano27",
+          "tooltip": "Костер",
+          "targetView": null
+        }
+      ],
+      "zone": "molod",
+      "map": {
+        "x": 62.4,
+        "y": 34.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano33",
+      "folder": "niz1_33",
+      "title": "Нижний участок — вид сверху",
+      "initialView": {
+        "h": -19.95,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -143.511121,
+          "atv": -8.893261,
+          "target": "pano19",
+          "tooltip": "Центр базы (2)",
+          "targetView": {
+            "h": -135.743802,
+            "v": 0.743802,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -155.115468,
+          "atv": -13.810501,
+          "target": "pano25",
+          "tooltip": "Номера в администрации",
+          "targetView": null
+        },
+        {
+          "ath": -111.202562,
+          "atv": -1.138319,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -91.942558,
+          "atv": -2.025722,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -60.978241,
+          "atv": 0.347217,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -51.455519,
+          "atv": 0.095755,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 177.672958,
+          "atv": -8.816941,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 136.454401,
+          "atv": -8.816941,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 94.625287,
+          "atv": -2.73168,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 69.115677,
+          "atv": -1.293839,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -13.329356,
+          "atv": 7.317538,
+          "target": "pano34",
+          "tooltip": "Нижний участок — 2",
+          "targetView": null
+        },
+        {
+          "ath": -25.242484,
+          "atv": -10.393742,
+          "target": "pano23",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 89.256198,
+            "v": -2.603306,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "lower",
+      "map": {
+        "x": 65.4,
+        "y": 79.1
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano34",
+      "folder": "niz2_34",
+      "title": "Нижний участок — у домиков",
+      "initialView": {
+        "h": -18.0,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 6.842165,
+          "atv": -2.145419,
+          "target": "pano43",
+          "tooltip": "Баня",
+          "targetView": {
+            "h": -142.438017,
+            "v": 1.859504,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 152.281086,
+          "atv": -6.914161,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 140.598006,
+          "atv": -7.14474,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 124.905968,
+          "atv": -7.375141,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 107.38153,
+          "atv": -7.490342,
+          "target": "pano35",
+          "tooltip": "Домик 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -93.640321,
+          "atv": -1.8999,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -114.015239,
+          "atv": -2.181419,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -148.862917,
+          "atv": -4.010938,
+          "target": "pano18",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -162.211859,
+          "atv": -3.588662,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": -36.958684,
+          "atv": 6.508262,
+          "target": "pano28",
+          "tooltip": "Костер",
+          "targetView": null
+        },
+        {
+          "ath": 142.733517,
+          "atv": 5.61366,
+          "target": "pano33",
+          "tooltip": "Нижний участок — 1",
+          "targetView": {
+            "h": 134.39265,
+            "v": -1.85955,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -58.893124,
+          "atv": -16.854841,
+          "target": "pano23",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 90.0,
+            "v": -1.115702,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 178.52869,
+          "atv": -4.543018,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 170.877249,
+          "atv": -4.248362,
+          "target": "pano36",
+          "tooltip": "Номер 2х местный",
+          "targetView": null
+        },
+        {
+          "ath": 163.049405,
+          "atv": -5.18706,
+          "target": "pano19",
+          "tooltip": "Центр базы (2)",
+          "targetView": {
+            "h": -150.619835,
+            "v": -1.859504,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "lower",
+      "map": {
+        "x": 77.9,
+        "y": 73.5
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano24",
+      "folder": "katun_24",
+      "title": "Берег Катуни",
+      "initialView": {
+        "h": 69.92,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -125.156878,
+          "atv": -3.792241,
+          "target": "pano27",
+          "tooltip": "У костра",
+          "targetView": null
+        },
+        {
+          "ath": 104.244483,
+          "atv": 0.991977,
+          "target": "pano28",
+          "tooltip": "У костра",
+          "targetView": null
+        },
+        {
+          "ath": 126.013312,
+          "atv": -17.079658,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 117.892562,
+            "v": 8.553719,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 163.560247,
+          "atv": -15.93414,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 152.85124,
+            "v": 14.132231,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 151.00487,
+          "atv": -11.909882,
+          "target": "pano32",
+          "tooltip": "ул. Молодежная",
+          "targetView": {
+            "h": 175.315064,
+            "v": -0.200488,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 51.0,
+        "y": 9.5
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano108",
+      "folder": "kamen1_108",
+      "title": "Вид с утёса — 1",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -129.696119,
+          "atv": 17.035557,
+          "target": "pano42",
+          "tooltip": "Баня",
+          "targetView": {
+            "h": -115.25929,
+            "v": -24.54606,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 0.367205,
+          "atv": 4.051799,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 93.347107,
+            "v": 20.454545,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 38.54521,
+          "atv": 0.584818,
+          "target": "pano23",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -87.396694,
+            "v": 11.900826,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 119.304721,
+          "atv": 14.210461,
+          "target": "pano29",
+          "tooltip": "ул. Молодежная",
+          "targetView": null
+        },
+        {
+          "ath": -157.723488,
+          "atv": 9.000002,
+          "target": "pano46",
+          "tooltip": "Верхний участок",
+          "targetView": {
+            "h": -179.628099,
+            "v": 10.785124,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -120.097438,
+          "atv": 8.987042,
+          "target": "pano27",
+          "tooltip": "Костер",
+          "targetView": null
+        },
+        {
+          "ath": -76.884481,
+          "atv": 16.116664,
+          "target": "pano24",
+          "tooltip": "На берег Катуни",
+          "targetView": {
+            "h": -16.73503,
+            "v": 1.48764,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 141.035399,
+          "atv": 7.502224,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": {
+            "h": -16.40203,
+            "v": -1.11573,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 74.189515,
+          "atv": 3.283925,
+          "target": "pano40",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 133.10695,
+            "v": -0.37191,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 44.0,
+        "y": 28.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano21",
+      "folder": "kamen2_21",
+      "title": "Вид с утёса — 2",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 61.999197,
+          "atv": -1.257661,
+          "target": "pano22",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 94.46281,
+            "v": 7.066116,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 84.866767,
+          "atv": 34.524536,
+          "target": "pano32",
+          "tooltip": "ул. Молодежная",
+          "targetView": {
+            "h": 122.505147,
+            "v": -3.919497,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -100.040039,
+          "atv": 20.824918,
+          "target": "pano24",
+          "tooltip": "На берег Катуни",
+          "targetView": null
+        },
+        {
+          "ath": 175.334051,
+          "atv": 3.354478,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -139.46281,
+            "v": 6.322314,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -151.376112,
+          "atv": 7.494124,
+          "target": "pano27",
+          "tooltip": "Костер",
+          "targetView": null
+        },
+        {
+          "ath": -171.648792,
+          "atv": 5.281559,
+          "target": "pano42",
+          "tooltip": "Баня",
+          "targetView": {
+            "h": -102.98626,
+            "v": -18.22359,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 146.841846,
+          "atv": 4.818417,
+          "target": "pano19",
+          "tooltip": "Центр базы (2)",
+          "targetView": {
+            "h": 177.396694,
+            "v": -5.206612,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 42.080405,
+          "atv": 7.685999,
+          "target": "pano28",
+          "tooltip": "Костер",
+          "targetView": null
+        },
+        {
+          "ath": 115.71084,
+          "atv": 3.278518,
+          "target": "pano40",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 136.44526,
+            "v": -3.7191,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 62.7,
+        "y": 20.9
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano22",
+      "folder": "kamen3_22",
+      "title": "Вид с утёса — 3",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3183,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -99.210598,
+          "atv": 21.609904,
+          "target": "pano32",
+          "tooltip": "ул. Молодежная",
+          "targetView": {
+            "h": -175.015515,
+            "v": -0.572389,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -93.428282,
+          "atv": 5.216221,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -125.330579,
+            "v": -1.859504,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -121.967999,
+          "atv": 3.119763,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -107.107438,
+            "v": 1.115702,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -149.190192,
+          "atv": 3.522416,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": {
+            "h": -175.94254,
+            "v": 3.34719,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 66.884036,
+          "atv": 0.476822,
+          "target": "pano23",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -128.305785,
+            "v": 1.115702,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 168.230875,
+          "atv": 19.322999,
+          "target": "pano39",
+          "tooltip": "Поляна",
+          "targetView": {
+            "h": -151.63777,
+            "v": 16.73595,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -163.142568,
+          "atv": 5.999941,
+          "target": "pano40",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -78.50096,
+            "v": -9.66966,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": 37.891073,
+          "atv": 17.84052,
+          "target": "pano28",
+          "tooltip": "Костер",
+          "targetView": null
+        },
+        {
+          "ath": 143.486273,
+          "atv": 4.361218,
+          "target": "pano33",
+          "tooltip": "Нижний участок",
+          "targetView": null
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 70.0,
+        "y": 19.7
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano23",
+      "folder": "kamen4_23",
+      "title": "Вид с утёса — 4",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3182,
+          "tileSize": 512
+        },
+        {
+          "size": 1591,
+          "tileSize": 512
+        },
+        {
+          "size": 795,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -87.512037,
+          "atv": 15.220259,
+          "target": "pano33",
+          "tooltip": "Нижний участок",
+          "targetView": {
+            "h": 126.95445,
+            "v": -5.57865,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -7.615435,
+          "atv": 14.261756,
+          "target": "pano39",
+          "tooltip": "Поляна",
+          "targetView": {
+            "h": -166.8772,
+            "v": -5.20452,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -56.437562,
+          "atv": -1.044538,
+          "target": "pano25",
+          "tooltip": "Номера в администрации",
+          "targetView": null
+        },
+        {
+          "ath": 26.255522,
+          "atv": 8.734496,
+          "target": "pano22",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -96.322314,
+            "v": 3.347107,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 36.687598,
+          "atv": 4.957377,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -83.305785,
+            "v": 1.859504,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -120.2976,
+          "atv": 14.715725,
+          "target": "pano43",
+          "tooltip": "Баня",
+          "targetView": {
+            "h": -144.297521,
+            "v": 2.603306,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -15.537962,
+          "atv": 3.545644,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": {
+            "h": -164.78524,
+            "v": -0.74382,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -10.603083,
+          "atv": 7.091095,
+          "target": "pano40",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -89.29523,
+            "v": -13.01685,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 74.9,
+        "y": 48.9
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano27",
+      "folder": "lob1_27",
+      "title": "Костёр 1",
+      "initialView": {
+        "h": -163.82,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 84.528358,
+          "atv": -14.080321,
+          "target": "pano46",
+          "tooltip": "На базу",
+          "targetView": {
+            "h": 55.041322,
+            "v": -2.975207,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -15.232683,
+          "atv": 2.677681,
+          "target": "pano24",
+          "tooltip": "На берег Катуни",
+          "targetView": null
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 33.1,
+        "y": 15.2
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano28",
+      "folder": "lob2_28",
+      "title": "Костёр 2",
+      "initialView": {
+        "h": 0.0,
+        "v": 0.0,
+        "fov": 74.380165
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -142.14924,
+          "atv": -13.513682,
+          "target": "pano32",
+          "tooltip": "На базу",
+          "targetView": {
+            "h": -166.089895,
+            "v": -3.175695,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 145.627921,
+          "atv": -3.225238,
+          "target": "pano34",
+          "tooltip": "На базу",
+          "targetView": {
+            "h": 150.83826,
+            "v": 0.74382,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -88.135564,
+          "atv": 2.897644,
+          "target": "pano24",
+          "tooltip": "На берег Катуни",
+          "targetView": {
+            "h": -1.11481,
+            "v": 3.34719,
+            "fov": 74.382
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 92.1,
+        "y": 56.1
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano39",
+      "folder": "pole_39",
+      "title": "Поляна",
+      "initialView": {
+        "h": 163.37,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": 137.92393,
+          "atv": 3.77964,
+          "target": "pano33",
+          "tooltip": "Нижний участок",
+          "targetView": null
+        },
+        {
+          "ath": 38.01851,
+          "atv": -4.456619,
+          "target": "pano23",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": 97.066116,
+            "v": -1.487603,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -76.816084,
+          "atv": -2.494621,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -114.917355,
+            "v": 2.231405,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -21.189237,
+          "atv": -10.296362,
+          "target": "pano22",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -21.198347,
+            "v": 2.231405,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -145.303631,
+          "atv": -2.834998,
+          "target": "pano40",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -38.70659,
+            "v": -9.66966,
+            "fov": 74.382
+          }
+        },
+        {
+          "ath": -163.891404,
+          "atv": -1.00386,
+          "target": "pano19",
+          "tooltip": "Центр базы (2)",
+          "targetView": {
+            "h": -162.14876,
+            "v": -8.553719,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 62.4,
+        "y": 50.6
+      },
+      "hiddenOnMap": false
+    },
+    {
+      "id": "pano40",
+      "folder": "pole2_40",
+      "title": "Поляна — от беседки",
+      "initialView": {
+        "h": 79.18,
+        "v": 0.0,
+        "fov": 74.382
+      },
+      "levels": [
+        {
+          "size": 3184,
+          "tileSize": 512
+        },
+        {
+          "size": 1592,
+          "tileSize": 512
+        },
+        {
+          "size": 796,
+          "tileSize": 512
+        }
+      ],
+      "hotspots": [
+        {
+          "ath": -15.696362,
+          "atv": 0.507056,
+          "target": "pano21",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -74.008264,
+            "v": -3.347107,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": -112.952521,
+          "atv": 6.415565,
+          "target": "pano18",
+          "tooltip": "Центр базы",
+          "targetView": null
+        },
+        {
+          "ath": -68.09544,
+          "atv": 0.555475,
+          "target": "pano108",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -63.595041,
+            "v": -4.834711,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 61.632721,
+          "atv": -3.337381,
+          "target": "pano23",
+          "tooltip": "Вид с утеса",
+          "targetView": {
+            "h": -88.884298,
+            "v": 4.090909,
+            "fov": 74.380165
+          }
+        },
+        {
+          "ath": 141.823432,
+          "atv": -0.846001,
+          "target": "pano33",
+          "tooltip": "Нижний участок",
+          "targetView": null
+        },
+        {
+          "ath": 20.501647,
+          "atv": 8.175244,
+          "target": "pano32",
+          "tooltip": "ул. Молодежная",
+          "targetView": {
+            "h": 166.389444,
+            "v": -1.688092,
+            "fov": 74.380165
+          }
+        }
+      ],
+      "zone": "views",
+      "map": {
+        "x": 66.0,
+        "y": 62.0
+      },
+      "hiddenOnMap": false
+    }
+  ]
+};
+
+const ZONE_INFO = {
+  objects: { name:"Объекты",         color:"#4a7a5c" },
+  rooms:   { name:"Номера",          color:"#8b6f47" },
+  molod:   { name:"Ул. Молодёжная",  color:"#c07a3e" },
+  upper:   { name:"Верхний участок", color:"#5b7a99" },
+  lower:   { name:"Нижний участок",  color:"#3e8577" },
+  views:   { name:"Виды и природа",  color:"#a25e7d" },
+  other:   { name:"Другое",          color:"#7a8278" }
+};
+
+// Режим редактирования — по параметру ?edit=1
+const EDIT_MODE = new URLSearchParams(location.search).get("edit") === "1";
+
+// В edit-режиме показываем ВСЕ сцены (включая скрытые), чтобы можно было расставить и их
+const MAP_SCENES = EDIT_MODE
+  ? TOUR_CONFIG.scenes
+  : TOUR_CONFIG.scenes.filter(s => !s.hiddenOnMap);
+
+const scenesById = {};
+const faceCache  = {};
+let currentScene = null;
+let currentIdx   = 0;
+let currentLoadToken = 0;
+let autoRotating = false;
+
+const mapview  = document.getElementById("mapview");
+const panoview = document.getElementById("panoview");
+
+const panoEl = document.getElementById("pano");
+const viewer = new Marzipano.Viewer(panoEl, { controls: { mouseViewMode: "drag" } });
+
+function showLoader(text, progress) {
+  document.getElementById("loader").classList.remove("hidden");
+  if (text !== undefined && text !== null) document.getElementById("loaderText").textContent = text;
+  if (progress !== undefined) document.getElementById("loaderProgress").textContent = progress || "";
+}
+function hideLoader() { document.getElementById("loader").classList.add("hidden"); }
+
+const BUILD_LEVEL = 1;
+const BUILD_SIZE  = 1591;
+const TILES_PER_ROW = 4;
+const TILE_PX = 512;
+
+function loadImage(src) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => res(null);
+    img.src = src;
+  });
+}
+async function assembleFace(folder, faceNum, cb) {
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = BUILD_SIZE;
+  const ctx = canvas.getContext("2d");
+  const tasks = [];
+  for (let y = 0; y < TILES_PER_ROW; y++) {
+    for (let x = 0; x < TILES_PER_ROW; x++) {
+      const url = `${TOUR_CONFIG.tilesBase}/${folder}/${faceNum}/${BUILD_LEVEL}/${y}_${x}.jpg`;
+      tasks.push(loadImage(url).then(img => {
+        if (img) ctx.drawImage(img, x * TILE_PX, y * TILE_PX);
+        if (cb) cb();
+      }));
+    }
+  }
+  await Promise.all(tasks);
+  return new Promise(res => canvas.toBlob(b => res(URL.createObjectURL(b)), "image/jpeg", 0.9));
+}
+async function assembleScene(sceneData, onProgress) {
+  const total = 6 * TILES_PER_ROW * TILES_PER_ROW;
+  let loaded = 0;
+  const cb = () => { loaded++; if (onProgress) onProgress(loaded, total); };
+  const urls = await Promise.all([0,1,2,3,4,5].map(fn => assembleFace(sceneData.folder, fn, cb)));
+  return { f: urls[0], r: urls[1], b: urls[2], l: urls[3], u: urls[4], d: urls[5] };
+}
+
+function buildScene(sceneData) {
+  const source = new Marzipano.ImageUrlSource(tile => {
+    const cache = faceCache[sceneData.id];
+    if (!cache) return { url: "" };
+    return { url: cache[tile.face] };
+  });
+  const geometry = new Marzipano.CubeGeometry([{ tileSize: BUILD_SIZE, size: BUILD_SIZE }]);
+  const limiter = Marzipano.util.compose(
+    Marzipano.RectilinearView.limit.vfov(10 * Math.PI/180, 120 * Math.PI/180),
+    Marzipano.RectilinearView.limit.hfov(10 * Math.PI/180, 120 * Math.PI/180)
+  );
+  const view = new Marzipano.RectilinearView({
+    yaw:   sceneData.initialView.h * Math.PI / 180,
+    pitch: sceneData.initialView.v * Math.PI / 180,
+    fov:   sceneData.initialView.fov * Math.PI / 180
+  }, limiter);
+  const scene = viewer.createScene({ source, geometry, view, pinFirstLevel: true });
+  sceneData.hotspots.forEach(h => {
+    const el = document.createElement("div");
+    el.className = "hotspot";
+    el.innerHTML = `<div class="hotspot__dot"></div>
+                    <div class="hotspot__label">${h.tooltip || 'Перейти'}</div>`;
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      loadScene(h.target, h.targetView);
+    });
+    scene.hotspotContainer().createHotspot(el, {
+      yaw:   h.ath * Math.PI / 180,
+      pitch: h.atv * Math.PI / 180
+    });
+  });
+  return { scene, view, data: sceneData };
+}
+
+async function loadScene(sceneId, targetView) {
+  const s = scenesById[sceneId];
+  if (!s) return;
+  mapview.classList.add("hidden");
+  panoview.classList.remove("hidden");
+  const token = ++currentLoadToken;
+
+  // 1. МГНОВЕННО показываем preview.jpg как размытый фон
+  const previewEl = document.getElementById("panoPreview");
+  const previewUrl = `${TOUR_CONFIG.tilesBase}/${s.data.folder}/preview.jpg`;
+  previewEl.style.backgroundImage = `url("${previewUrl}")`;
+  previewEl.classList.remove("hidden");
+
+  // 2. Обновляем сразу заголовок и мета
+  currentScene = s;
+  currentIdx = MAP_SCENES.findIndex(x => x.id === sceneId);
+  if (currentIdx < 0) currentIdx = 0;
+  document.getElementById("sceneTitle").textContent = s.data.title;
+  document.getElementById("sceneZone").textContent  = (ZONE_INFO[s.data.zone] || {}).name || "";
+  document.getElementById("counter").textContent = `${currentIdx+1} / ${MAP_SCENES.length}`;
+
+  // 3. Показываем loader для прогресса
+  showLoader(`Загружаю: ${s.data.title}`, "0%");
+
+  // 4. Собираем грани если ещё нет в кэше
+  if (!faceCache[sceneId]) {
+    const cache = await assembleScene(s.data, (loaded, total) => {
+      if (token !== currentLoadToken) return;
+      showLoader(null, `${Math.round(loaded/total*100)}%`);
+    });
+    if (token !== currentLoadToken) return;
+    faceCache[sceneId] = cache;
+  }
+  if (token !== currentLoadToken) return;
+
+  // 5. Настраиваем view
+  const view = targetView || s.data.initialView;
+  s.view.setYaw(view.h * Math.PI / 180);
+  s.view.setPitch(view.v * Math.PI / 180);
+  s.view.setFov(view.fov * Math.PI / 180);
+
+  // 6. Переключаем сцену и форсируем рендер
+  s.scene.switchTo({ transitionDuration: 200 }, () => {
+    if (token !== currentLoadToken) return;
+    // Форс-триггер рендера Marzipano — иначе панорама не отрисуется до взаимодействия
+    viewer.updateSize();
+    s.view.setYaw(s.view.yaw() + 0.0001);
+    requestAnimationFrame(() => {
+      // Скрываем loader и preview с небольшой задержкой чтобы Marzipano успел отрисоваться
+      setTimeout(() => {
+        hideLoader();
+        previewEl.classList.add("hidden");
+      }, 150);
+    });
+  });
+}
+
+function showMap() {
+  mapview.classList.remove("hidden");
+  panoview.classList.add("hidden");
+  document.querySelectorAll(".mdot").forEach(d =>
+    d.classList.toggle("active", currentScene && d.dataset.id === currentScene.data.id));
+}
+
+// ============================================================
+// MAP — оригинальная картинка + точки в %
+// ============================================================
+document.getElementById("mapImg").src = TOUR_CONFIG.floorplan;
+
+function renderMapDots() {
+  const inner = document.getElementById("mapInner");
+  inner.querySelectorAll(".mdot").forEach(d => d.remove());
+  MAP_SCENES.forEach((s, i) => {
+    const dot = document.createElement("div");
+    dot.className = "mdot";
+    dot.dataset.id = s.id;
+    dot.style.left = s.map.x + "%";
+    dot.style.top  = s.map.y + "%";
+    const color = (ZONE_INFO[s.zone] || {}).color || "#4a7a5c";
+    dot.innerHTML = `
+      <div class="mdot__pin" style="background: ${color}">${i+1}</div>
+      <div class="mdot__label">${s.title}</div>`;
+
+    if (EDIT_MODE) {
+      attachDrag(dot, s);
+    } else {
+      dot.addEventListener("click", () => loadScene(s.id));
+    }
+    inner.appendChild(dot);
+  });
+}
+
+// ============================================================
+// EDITOR MODE — drag & drop точек
+// ============================================================
+function attachDrag(dot, sceneData) {
+  let dragging = false;
+  let startX, startY;
+  let containerRect;
+
+  function onDown(e) {
+    e.preventDefault();
+    dragging = false; // станет true если реально сдвинули
+    startX = (e.touches ? e.touches[0].clientX : e.clientX);
+    startY = (e.touches ? e.touches[0].clientY : e.clientY);
+    containerRect = document.getElementById("mapInner").getBoundingClientRect();
+    dot.classList.add("dragging");
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.addEventListener("touchmove", onMove, { passive: false });
+    document.addEventListener("touchend", onUp);
+  }
+  function onMove(e) {
+    e.preventDefault();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX);
+    const cy = (e.touches ? e.touches[0].clientY : e.clientY);
+    if (Math.abs(cx - startX) > 3 || Math.abs(cy - startY) > 3) dragging = true;
+    if (!dragging) return;
+    const xPct = ((cx - containerRect.left) / containerRect.width) * 100;
+    const yPct = ((cy - containerRect.top)  / containerRect.height) * 100;
+    dot.style.left = Math.max(0, Math.min(100, xPct)) + "%";
+    dot.style.top  = Math.max(0, Math.min(100, yPct)) + "%";
+    sceneData.map.x = Math.round(xPct * 10) / 10;
+    sceneData.map.y = Math.round(yPct * 10) / 10;
+  }
+  function onUp(e) {
+    dot.classList.remove("dragging");
+    document.removeEventListener("mousemove", onMove);
+    document.removeEventListener("mouseup", onUp);
+    document.removeEventListener("touchmove", onMove);
+    document.removeEventListener("touchend", onUp);
+    if (!dragging) {
+      // это был клик, а не drag — открываем сцену
+      loadScene(sceneData.id);
+    }
+  }
+  dot.addEventListener("mousedown", onDown);
+  dot.addEventListener("touchstart", onDown, { passive: false });
+}
+
+// Экспорт координат
+function exportPositions() {
+  const out = {};
+  TOUR_CONFIG.scenes.forEach(s => {
+    out[s.folder] = { x: s.map.x, y: s.map.y };
+  });
+  const text = JSON.stringify(out, null, 2);
+  document.getElementById("exportText").value = text;
+  document.getElementById("exportModal").classList.add("visible");
+}
+
+function renderLegend() {
+  const l = document.getElementById("legend");
+  l.innerHTML = "";
+  const usedZones = [...new Set(MAP_SCENES.map(s => s.zone))];
+  usedZones.forEach(z => {
+    const info = ZONE_INFO[z]; if (!info) return;
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `<div class="legend-swatch" style="background: ${info.color}"></div>${info.name}`;
+    l.appendChild(item);
+  });
+}
+
+// ============================================================
+// Modals
+// ============================================================
+const listModal = document.getElementById("listModal");
+document.getElementById("btnListModal").onclick = () => {
+  listModal.classList.add("visible");
+  renderModalList("all");
+  buildModalFilter();
+};
+document.getElementById("btnCloseModal").onclick = () => listModal.classList.remove("visible");
+listModal.addEventListener("click", e => { if (e.target === listModal) listModal.classList.remove("visible"); });
+
+function buildModalFilter() {
+  const f = document.getElementById("modalFilter");
+  if (f.children.length > 1) return;
+  const usedZones = [...new Set(TOUR_CONFIG.scenes.map(s => s.zone))];
+  usedZones.forEach(z => {
+    const info = ZONE_INFO[z]; if (!info) return;
+    const b = document.createElement("button");
+    b.className = "zone-chip"; b.dataset.zone = z; b.textContent = info.name;
+    b.onclick = () => {
+      f.querySelectorAll(".zone-chip").forEach(x => x.classList.remove("active"));
+      b.classList.add("active"); renderModalList(z);
+    };
+    f.appendChild(b);
+  });
+  f.querySelector('[data-zone="all"]').onclick = () => {
+    f.querySelectorAll(".zone-chip").forEach(x => x.classList.remove("active"));
+    f.querySelector('[data-zone="all"]').classList.add("active");
+    renderModalList("all");
+  };
+}
+function renderModalList(zone) {
+  const list = document.getElementById("modalList");
+  list.innerHTML = "";
+  const filtered = zone === "all" ? TOUR_CONFIG.scenes
+    : TOUR_CONFIG.scenes.filter(s => s.zone === zone);
+  filtered.forEach(s => {
+    const mapIdx = MAP_SCENES.findIndex(x => x.id === s.id);
+    const label = mapIdx >= 0 ? String(mapIdx + 1) : "•";
+    const zoneColor = (ZONE_INFO[s.zone] || {}).color || "#4a7a5c";
+    const item = document.createElement("div");
+    item.className = "scene-item";
+    item.innerHTML = `
+      <div class="scene-item__num" style="background: ${zoneColor}">${label}</div>
+      <div class="scene-item__info">
+        <div class="scene-item__name">${s.title}</div>
+        <div class="scene-item__zone">${(ZONE_INFO[s.zone]||{}).name || ""} · ${s.hotspots.length} переходов</div>
+      </div>`;
+    item.onclick = () => { listModal.classList.remove("visible"); loadScene(s.id); };
+    list.appendChild(item);
+  });
+}
+
+// Export modal
+const exportModal = document.getElementById("exportModal");
+document.getElementById("btnCloseExport").onclick = () => exportModal.classList.remove("visible");
+exportModal.addEventListener("click", e => { if (e.target === exportModal) exportModal.classList.remove("visible"); });
+document.getElementById("btnCopyExport").onclick = async () => {
+  const text = document.getElementById("exportText").value;
+  try {
+    await navigator.clipboard.writeText(text);
+    document.getElementById("btnCopyExport").textContent = "Скопировано ✓";
+    setTimeout(() => document.getElementById("btnCopyExport").textContent = "Скопировать в буфер", 1800);
+  } catch(e) {
+    document.getElementById("exportText").select();
+    document.execCommand("copy");
+  }
+};
+
+// Controls
+function pan(dh, dv) {
+  if (!currentScene) return;
+  const v = currentScene.view;
+  v.setYaw(v.yaw() + dh * Math.PI / 180);
+  v.setPitch(Math.max(-Math.PI/2, Math.min(Math.PI/2, v.pitch() + dv * Math.PI / 180)));
+}
+function zoom(k) {
+  if (!currentScene) return;
+  const v = currentScene.view;
+  v.setFov(Math.max(10*Math.PI/180, Math.min(120*Math.PI/180, v.fov() * k)));
+}
+document.getElementById("btnLeft").onclick   = () => pan(-15, 0);
+document.getElementById("btnRight").onclick  = () => pan( 15, 0);
+document.getElementById("btnUp").onclick     = () => pan(0, -10);
+document.getElementById("btnDown").onclick   = () => pan(0,  10);
+document.getElementById("btnZoomIn").onclick  = () => zoom(0.75);
+document.getElementById("btnZoomOut").onclick = () => zoom(1.35);
+
+const autoMotion = Marzipano.autorotate({ yawSpeed: 0.05, targetPitch: 0, targetFov: 75*Math.PI/180 });
+document.getElementById("btnAuto").onclick = function() {
+  autoRotating = !autoRotating;
+  this.classList.toggle("active", autoRotating);
+  viewer.setIdleMovement(autoRotating ? 1000 : Infinity, autoRotating ? autoMotion : null);
+  if (autoRotating) viewer.breakIdle();
+};
+document.getElementById("btnFull").onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+document.getElementById("btnPrev").onclick = () => {
+  const i = (currentIdx - 1 + MAP_SCENES.length) % MAP_SCENES.length;
+  loadScene(MAP_SCENES[i].id);
+};
+document.getElementById("btnNext").onclick = () => {
+  const i = (currentIdx + 1) % MAP_SCENES.length;
+  loadScene(MAP_SCENES[i].id);
+};
+document.getElementById("btnBackMap").onclick = showMap;
+
+// Edit mode UI
+if (EDIT_MODE) {
+  document.body.classList.add("editmode");
+  document.getElementById("editBadge").style.display = "";
+  document.getElementById("btnExport").style.display = "";
+  document.getElementById("btnExport").onclick = exportPositions;
+  document.getElementById("mapviewTitle").textContent = "Редактор точек";
+  document.getElementById("mapviewSubtitle").textContent = "Перетаскивайте точки. Клик без движения — открывает сцену. Готово — жми «Экспорт координат»";
+}
+
+// Init
+TOUR_CONFIG.scenes.forEach(s => { scenesById[s.id] = buildScene(s); });
+renderMapDots();
+renderLegend();
+
+// Прогреваем кэш preview.jpg в фоне — потом переключение сцен мгновенное
+if (!EDIT_MODE) {
+  setTimeout(() => {
+    TOUR_CONFIG.scenes.forEach(s => {
+      const img = new Image();
+      img.src = `${TOUR_CONFIG.tilesBase}/${s.folder}/preview.jpg`;
+    });
+  }, 500);
+}
+</script>
+</body>
+</html>
